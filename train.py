@@ -8,6 +8,7 @@ import common as com
 
 import torch
 import torch.nn as nn
+import random
 
 param = com.yaml_load()
 
@@ -37,6 +38,8 @@ class visualizer(object):
         ax.cla()
         ax.plot(loss)
         ax.plot(val_loss)
+        # 设置y轴范围
+        # self.plt.ylim(-5,100)
         ax.set_title("Model loss")
         ax.set_xlabel("Epoch")
         ax.set_ylabel("Loss")
@@ -86,8 +89,10 @@ def list_to_vector_array(file_list,
                                                 hop_length=hop_length,
                                                 power=power)
         if idx == 0:
-            dataset = numpy.zeros((vector_array.shape[0] * len(file_list), dims), float)
-        dataset[vector_array.shape[0] * idx: vector_array.shape[0] * (idx + 1), :] = vector_array
+            dataset = numpy.zeros(
+                (vector_array.shape[0] * len(file_list), dims), float)
+        dataset[vector_array.shape[0] * idx: vector_array.shape[0]
+                * (idx + 1), :] = vector_array
 
     return dataset
 
@@ -109,7 +114,8 @@ def file_list_generator(target_dir,
     com.logger.info("target_dir : {}".format(target_dir))
 
     # generate training list
-    training_list_path = os.path.abspath("{dir}/{dir_name}/*.{ext}".format(dir=target_dir, dir_name=dir_name, ext=ext))
+    training_list_path = os.path.abspath(
+        "{dir}/{dir_name}/*.{ext}".format(dir=target_dir, dir_name=dir_name, ext=ext))
     files = sorted(glob.glob(training_list_path))
     if len(files) == 0:
         com.logger.exception("no_wav_file!!")
@@ -118,54 +124,82 @@ def file_list_generator(target_dir,
     return files
 
 
+def fetch_dataloaders(files, radio=0.9, batchsize=512):
+    len_d = len(files)
+    num_sample_train = int(len_d * radio)
+    index = list(range(len_d))
+    random.shuffle(files)
+    train = list(files[0:num_sample_train])
+    val = list(files[num_sample_train+1:])
+    train_data_loader = torch.utils.data.DataLoader(
+        dataset=train, batch_size=batchsize, shuffle=True)
+    val_data_loader = torch.utils.data.DataLoader(
+        dataset=val, batch_size=batchsize, shuffle=True)
+    loader = {}
+    loader['train'] = train_data_loader
+    loader['val'] = val_data_loader
+    return loader
+
 ########################################################################
-#pytorch 模型相关
-class FCNet(nn.Module):
+# pytorch 模型相关
+
+
+class AutoEncoder(nn.Module):
     def __init__(self):
-        super(FCNet, self).__init__()
-        self.layer = nn.Sequential(
-            nn.Linear(640,128),
+        super(AutoEncoder, self).__init__()
+
+        # Encoder
+        self.encoder = nn.Sequential(
+            nn.Linear(640, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
-
             nn.Linear(128, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
-
             nn.Linear(128, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
-
             nn.Linear(128, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
-
-            nn.Linear(128, 8),
-            nn.BatchNorm1d(8),
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
             nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Linear(32, 32),
+        )
 
-            nn.Linear(8, 128),
+        # Decoder
+        self.decoder = nn.Sequential(
+            nn.Linear(32, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Linear(32, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Linear(64, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
-
             nn.Linear(128, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
-
             nn.Linear(128, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
-
             nn.Linear(128, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
-
             nn.Linear(128, 640)
         )
 
-    def forward(self,x):
-        y = self.layer(x)
-        return y
+    def forward(self, inputs):
+        codes = self.encoder(inputs)
+        decoded = self.decoder(codes)
+
+        return codes, decoded
+
 
 ########################################################################
 # main train.py
@@ -174,61 +208,70 @@ if __name__ == "__main__":
     # check mode
     # "development": mode == True
     # "evaluation": mode == False
-    mode = com.command_line_chk()
-    if mode is None:
-        sys.exit(-1)
+    #mode = com.command_line_chk()
+    # if mode is None:
+    #    sys.exit(-1)
 
     # make output directory
-    os.makedirs(param["model_directory"], exist_ok=True)
+    #os.makedirs(param["model_directory"], exist_ok=True)
 
     # initialize the visualizer
-    visualizer = visualizer()
+    #visualizer = visualizer()
 
     # load base_directory list
-    dirs = com.select_dirs(param=param, mode=mode)
+    #dirs = com.select_dirs(param=param, mode=mode)
     # loop of the base directory
-    for idx, target_dir in enumerate(dirs):
-        print("\n===========================")
-        print("[{idx}/{total}] {dirname}".format(dirname=target_dir, idx=idx + 1, total=len(dirs)))
+    # for idx, target_dir in enumerate(dirs):
 
-        # set path
-        machine_type = os.path.split(target_dir)[1]
-        model_file_path = "{model}/model_{machine_type}.hdf5".format(model=param["model_directory"],
-                                                                     machine_type=machine_type)
-        history_img = "{model}/history_{machine_type}.png".format(model=param["model_directory"],
-                                                                  machine_type=machine_type)
+    # set path
+    train_dir = '../file/noise_detect'
+    files = file_list_generator(train_dir, dir_name="train")
+    com.logger.info('files num {num}'.format(num=len(files)))
+    train_data = list_to_vector_array(files,
+                                      msg="generate train_dataset",
+                                      n_mels=param["feature"]["n_mels"],
+                                      frames=param["feature"]["frames"],
+                                      n_fft=param["feature"]["n_fft"],
+                                      hop_length=param["feature"]["hop_length"],
+                                      power=param["feature"]["power"])
+    # train model
+    print("============== MODEL TRAINING ==============")
+    train_data = torch.Tensor(train_data)
+    com.logger.info('train_data num {num}'.format(num=len(train_data)))
+    train_loader = fetch_dataloaders(train_data, radio=0.9, batchsize=512)
+    model = AutoEncoder()
+    model.train()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    loss_func = nn.MSELoss()
+    loss_his = []
+    val_loss_his = []
 
-        if os.path.exists(model_file_path):
-            com.logger.info("model exists")
-            continue
+    for epoch in range(10):
+        losses = []
+        for data in tqdm(train_loader["train"]):
+            optimizer.zero_grad()
+            inputs = data
+            feature, y = model(inputs)
+            loss = loss_func(y, inputs)
+            losses.append(loss.data)
+            loss.backward()
+            optimizer.step()
+        numm = numpy.mean(losses)
+        loss_his.append(numpy.mean(losses))
+        val_losses = []
+        for data in tqdm(train_loader["val"]):
+            inputs = data
+            feature, y = model(inputs)
+            loss = loss_func(y, inputs)
+            val_losses.append(loss.data)
+            optimizer.step()
+            optimizer.zero_grad()
+        val_loss_his.append(numpy.mean(val_losses))
 
-        # generate dataset
-        print("============== DATASET_GENERATOR ==============")
-        files = file_list_generator(target_dir)
-        train_data = list_to_vector_array(files,
-                                          msg="generate train_dataset",
-                                          n_mels=param["feature"]["n_mels"],
-                                          frames=param["feature"]["frames"],
-                                          n_fft=param["feature"]["n_fft"],
-                                          hop_length=param["feature"]["hop_length"],
-                                          power=param["feature"]["power"])
+        print(loss, epoch, "\n")
 
-        # train model
-        print("============== MODEL TRAINING ==============")
-        train_data = torch.Tensor(train_data)
-        train_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=512, shuffle=True)
-        model = FCNet()
-        model.train()
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-        loss_func = nn.MSELoss()
-        for epoch in range(1000):
-            for data in tqdm(train_loader):
-                optimizer.zero_grad()
-                inputs = data
-                y = model(inputs)
-                loss = loss_func(y, inputs)
-                loss.backward()
-                optimizer.step()
-            print(loss, epoch, "\n")
-        torch.save(model, 'model/model.pkl')
-        print("============== END TRAINING ==============")
+    torch.save(model, 'model/model.pkl')
+    visualizer = visualizer()
+    visualizer.loss_plot(loss_his, val_loss_his)
+    visualizer.save_figure('loss_his.png')
+    print("============== END TRAINING ==============")
