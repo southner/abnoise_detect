@@ -9,8 +9,8 @@ max_fpr : 0.1
 feature:
   n_mels: 128
   frames : 5
-  n_fft: 1024
-  hop_length: 512
+  n_fft: 5120
+  hop_length: 2560
   power: 2.0
 
 
