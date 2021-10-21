@@ -270,11 +270,11 @@ if __name__ == "__main__":
 
 
 
-features = []
-for data in tqdm(train_loader["train"]):
-    inputs = data
-    feature, y = model(inputs)
-    for one_feature in feature:
-        features.append(one_feature)
-numpy.save(param["normal_feature_dic"],numpy.array(features))
+    features = []
+    for data in tqdm(train_loader["train"]):
+        inputs = data
+        feature, y = model(inputs)
+        for one_feature in feature:
+            features.append(one_feature)
+    numpy.save(param["normal_feature_dic"],numpy.array(features))
 
