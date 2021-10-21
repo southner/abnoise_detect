@@ -1,9 +1,13 @@
-dev_directory : ./dev_data
-eval_directory : ./eval_data
-model_directory: ./model
-result_directory: ./result
-result_file: result.csv
+debug_tag: 0
 
+train_dictionary : ../file/noise_detect
+model_file: model/model.pkl
+normal_feature_dic: feature/normal_data
+epoch: 10
+batch_size: 512
+test_batch_size: 32
+
+ab_dictionary: ../file/noise_detect
 max_fpr : 0.1
 
 feature:
