@@ -9,8 +9,8 @@ max_fpr : 0.1
 feature:
   n_mels: 128
   frames : 5
-  n_fft: 5120
-  hop_length: 2560
+  n_fft: 10240
+  hop_length: 5120
   power: 2.0
 
 
@@ -19,7 +19,8 @@ fit:
     optimizer : adam
     loss : mean_squared_error
   epochs : 100
-  batch_size : 512
+  batch_size : 128
   shuffle : True
   validation_split : 0.1
   verbose : 1
+
